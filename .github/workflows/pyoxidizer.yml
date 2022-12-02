@@ -56,13 +56,18 @@ jobs:
       - name: tar files
         shell: bash
         run: |
-          cd rally/build/x86_64-unknown-linux-gnu/release
-          archive=$(install/rally --version | tr ' ' '-')
-          mv install $archive
-          tar cvzf $archive.tar.gz $archive
+          cd rally
+          source .venv/bin/activate
+          VERSION=$(python -c 'import esrally; print(esrally.__version__)')
+
+          cd build/x86_64-unknown-linux-gnu/release
+
+          ARCHIVE=esrally-standalone-linux-$VERSION
+          mv install $ARCHIVE
+          tar cvzf $ARCHIVE.tar.gz $ARCHIVE
 
       - uses: actions/upload-artifact@v2
         with:
           name: rally
-          path: rally/build/x86_64-unknown-linux-gnu/release/rally*.tar.gz
+          path: rally/build/x86_64-unknown-linux-gnu/release/esrally-standalone-linux*.tar.gz
           if-no-files-found: error
