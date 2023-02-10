@@ -111,16 +111,6 @@ function install {
   make install
 }
 
-function it38 {
-  install
-  make it38
-}
-
-function it310 {
-  install
-  make it310
-}
-
 function rally-tracks-compat {
   install
   make rally-tracks-compat

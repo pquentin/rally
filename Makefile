@@ -108,22 +108,13 @@ test: check-venv
 	. $(VENV_ACTIVATE_FILE); pytest tests/
 
 unit: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38-unit
-	. $(VENV_ACTIVATE_FILE); tox -e py310-unit
+	. $(VENV_ACTIVATE_FILE); nox -s test-3.8
+	. $(VENV_ACTIVATE_FILE); tox -e test-3.10
 
 # checks min and max python versions
 it: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38-it
-	. $(VENV_ACTIVATE_FILE); tox -e py310-it
-
-it38: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38-it
-
-it39: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py39-it
-
-it310: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py310-it
+	. $(VENV_ACTIVATE_FILE); nox -s it-3.8
+	. $(VENV_ACTIVATE_FILE); nox -s it-3.10
 
 rally-tracks-compat: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e rally-tracks-compat
@@ -140,4 +131,4 @@ release-checks: check-venv
 release: check-venv release-checks clean docs it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 it39 it310 benchmark release release-checks prereq venv-create check-env
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it benchmark release release-checks prereq venv-create check-env
