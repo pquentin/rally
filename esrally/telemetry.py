@@ -48,6 +48,7 @@ def list_telemetry():
             DataStreamStats,
             IngestPipelineStats,
             DiskUsageStats,
+            DiskSeeksStats
         ]
     ]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
@@ -2340,3 +2341,87 @@ class DiskUsageStats(TelemetryDevice):
                 knn_vectors = field_info.get("knn_vectors_in_bytes", 0)
                 if knn_vectors > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_knn_vectors", knn_vectors, meta_data=meta, unit="byte")
+
+
+class DiskSeeksStats(TelemetryDevice):
+    """
+    Measures the space taken by each field
+    """
+
+    internal = False
+    command = "disk-seeks-stats"
+    human_name = "Disk seeks of each field"
+    help = "Runs the indices disk seeks API after benchmarking"
+
+    def __init__(self, telemetry_params, client, metrics_store, index_names, data_stream_names):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            May specify:
+            ``disk-usage-stats-indices``: Comma separated list of indices who's disk
+                usage to fetch. Default is all indices in the track.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param index_names: Names of indices defined by this track
+        :param data_stream_names: Names of data streams defined by this track
+        """
+        super().__init__()
+        self.telemetry_params = telemetry_params
+        self.client = client
+        self.metrics_store = metrics_store
+        self.index_names = index_names
+        self.data_stream_names = data_stream_names
+
+    def on_benchmark_start(self):
+        self.indices = self.telemetry_params.get("disk-seeks-stats-indices", ",".join(self.index_names + self.data_stream_names))
+        if not self.indices:
+            msg = (
+                "No indices defined for disk-usage-stats. Set disk-usage-stats-indices "
+                "telemetry param or add indices or data streams to the track config."
+            )
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+    def on_benchmark_stop(self):
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        found = False
+        for index in self.indices.split(","):
+            self.logger.debug("Gathering disk seeks for [%s]", index)
+            try:
+                response = self.client.perform_request(method="GET", path=f"/{index}/_seek_stats")
+            except elasticsearch.RequestError:
+                msg = f"A transport error occurred while collecting disk seeks for {index}"
+                self.logger.exception(msg)
+                raise exceptions.RallyError(msg)
+            except elasticsearch.NotFoundError:
+                msg = f"Requested disk usage for missing index {index}"
+                self.logger.warning(msg)
+                continue
+            found = True
+            self.handle_telemetry_usage(response)
+        if not found:
+            msg = f"Couldn't find any indices for disk seeks {self.indices}"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+    def handle_telemetry_usage(self, response):
+        total_index_seeks = {}
+        for node, indexSeekStats in response.items():
+            for index, seekStats in indexSeekStats.items():
+                total_seeks = 0
+                for seekStat in seekStats:
+                    shard_id = seekStat.pop("shard")
+                    shard_total = 0
+                    file_ext_counts = {}
+                    for file_name, count in seekStat['seeks'].items():
+                        file_ext = "*." + file_name.split(".")[-1]
+                        file_ext_counts[file_ext] = count + file_ext_counts.get(file_ext, 0)
+                        shard_total = shard_total + count
+                    for file_ext, count in file_ext_counts.items():
+                        self.metrics_store.put_value_cluster_level("disk_seeks", count, meta_data={"index": index, "shard_name": shard_id, "file": file_ext})
+                    self.metrics_store.put_value_cluster_level("disk_seeks", shard_total, meta_data={"index": index, "shard_name": shard_id, "file": "_all"})
+                    total_seeks = shard_total + total_seeks
+                total_index_seeks[index] = total_index_seeks.get(index, 0) + total_seeks
+        for index, totals in total_index_seeks.items():
+            self.metrics_store.put_value_cluster_level("disk_seeks", totals, meta_data={"index": index, "shard_name": "_all", "file": "_all"})

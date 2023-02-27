@@ -2066,6 +2066,9 @@ class GlobalStatsCalculator:
         result.disk_usage_norms = self.disk_usage("disk_usage_norms")
         result.disk_usage_term_vectors = self.disk_usage("disk_usage_term_vectors")
 
+        self.logger.debug("Gathering disk seek metrics.")
+        result.disk_seeks = self.disk_seeks("disk_seeks")
+
         return result
 
     def merge(self, *args):
@@ -2152,6 +2155,15 @@ class GlobalStatsCalculator:
                 field = meta.get("field")
                 if index is not None and field is not None:
                     result.append({"index": index, "field": field, "value": v["value"], "unit": v["unit"]})
+        return result
+
+    def disk_seeks(self, metric_name):
+        values = self.store.get_raw(metric_name)
+        result = []
+        if values:
+            for v in values:
+                meta = v.get("meta", {})
+                result.append({"index": meta["index"], "file": meta["file"], "shard_name": meta["shard_name"], "value": v["value"]})
         return result
 
     def error_rate(self, task_name, operation_type):
@@ -2246,6 +2258,8 @@ class GlobalStats:
         self.disk_usage_norms = self.v(d, "disk_usage_norms")
         self.disk_usage_term_vectors = self.v(d, "disk_usage_term_vectors")
 
+        self.disk_seeks = self.v(d, "disk_seeks")
+
     def as_dict(self):
         return self.__dict__
 
@@ -2291,6 +2305,9 @@ class GlobalStats:
             elif metric.startswith("disk_usage_") and value is not None:
                 for item in value:
                     all_results.append({"index": item["index"], "field": item["field"], "name": metric, "value": {"single": item["value"]}})
+            elif metric.startswith("disk_seeks") and value is not None:
+                for item in value:
+                    all_results.append({"index": item["index"], "shard_name": item["shard_name"], "file": item["file"], "name": metric, "value": {"single": item["value"]}})
             elif metric.endswith("_time_per_shard"):
                 if value:
                     all_results.append({"name": metric, "value": value})

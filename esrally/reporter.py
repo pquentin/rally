@@ -99,6 +99,11 @@ def disk_usage_fields(stats):
     }
 
 
+def disk_seeks_fields(stats):
+    return {
+        "disk_seeks": stats.disk_seeks,
+    }
+
 def collate_disk_usage_stats(stats):
     collated = {}
     for stat, field_stats in disk_usage_fields(stats).items():
@@ -147,6 +152,7 @@ class SummaryReporter:
         metrics_table.extend(self._report_ingest_pipeline_stats(stats))
 
         metrics_table.extend(self._report_disk_usage_per_field(stats))
+        metrics_table.extend(self._report_disk_seeks(stats))
 
         for record in stats.op_metrics:
             task = record["task"]
@@ -340,6 +346,14 @@ class SummaryReporter:
                 )
         return lines
 
+    def _report_disk_seeks(self, stats):
+        lines = []
+        for index, shard, file, value in sorted([[x["index"], x["shard_name"], x["file"], x["value"]] for x in stats.disk_seeks]):
+            lines.append(
+                 self._line(f"{index} {shard} {file} disk-seek-count", "", value, None)
+             )
+        return lines
+
     def _join(self, *args):
         lines = []
         for arg in args:
@@ -415,6 +429,8 @@ class ComparisonReporter:
         # Skip disk usage stats comparison if the disk_usage_total field does not exist
         if baseline_stats.disk_usage_total and contender_stats.disk_usage_total:
             metrics_table.extend(self._report_disk_usage_stats_per_field(baseline_stats, contender_stats))
+        if baseline_stats.disk_seeks and contender_stats.disk_seeks:
+            metrics_table.extend(self._report_disk_seeks_stats(baseline_stats, contender_stats))
 
         for t in baseline_stats.tasks():
             if t in contender_stats.tasks():
@@ -647,6 +663,37 @@ class ComparisonReporter:
                 treat_increase_as_improvement=False,
             )
         )
+
+    def _report_disk_seeks_stats(self, baseline_stats, contender_stats):
+        all_combos = set()
+        baseline_dict = {}
+        for index, shard, file, value in [[x["index"], x["shard_name"], x["file"], x["value"]] for x in baseline_stats.disk_seeks]:
+            all_combos.add((index, shard, file))
+            baseline_dict[(index, shard, file)] = value
+        contender_dict = {}
+        for index, shard, file, value in [[x["index"], x["shard_name"], x["file"], x["value"]] for x in contender_stats.disk_seeks]:
+            all_combos.add((index, shard, file))
+            contender_dict[(index, shard, file)] = value
+        totals = list(all_combos)
+        totals.sort()
+
+        lines = []
+        for index, shard, file in totals:
+            baseline_value = baseline_dict.get((index, shard, file), 0)
+            contender_value = contender_dict.get((index, shard, file), 0)
+            if baseline_value == 0 and contender_value == 0:
+                continue
+            lines.append(
+                self._line(
+                    f"{index} {shard} {file} disk-seek-count",
+                    baseline_value,
+                    contender_value,
+                    "",
+                    None,
+                    treat_increase_as_improvement=False,
+                )
+            )
+        return lines
 
     def _report_disk_usage_stats_per_field(self, baseline_stats, contender_stats):
         best = {}
