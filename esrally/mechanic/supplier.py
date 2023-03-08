@@ -531,7 +531,7 @@ class ExternalPluginSourceSupplier:
     def prepare(self):
         if self.builder:
             command = _config_value(self.dist_config, f"plugin.{self.plugin.name}.build.command")
-            build_cmd = f"export JAVA_HOME={self.builder.java_home}; cd {self.override_build_dir}; {command}"
+            build_cmd = f"export JAVA_HOME={self.builder.java_home}; cd {self.override_build_dir or self.plugin_src_dir}; {command}"
             self.builder.build([build_cmd])
 
     def add(self, binaries):
