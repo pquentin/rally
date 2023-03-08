@@ -46,6 +46,7 @@ def create(cfg, sources, distribution, car, plugins=None):
     build_needed = any(build for _, _, build in supply_requirements.values())
     es_supplier_type, es_version, _ = supply_requirements["elasticsearch"]
     src_config = cfg.all_opts("source")
+    dist_config = cfg.all_opts("distributions")
     suppliers = []
 
     target_os = cfg.opts("mechanic", "target.os", mandatory=False)
@@ -140,7 +141,7 @@ def create(cfg, sources, distribution, car, plugins=None):
                     plugin,
                     plugin_version,
                     _src_dir(cfg, mandatory=False),
-                    src_config,
+                    dist_config,
                     Builder(
                         src_dir=es_src_dir,
                         log_dir=paths.logs(),
@@ -494,25 +495,25 @@ class PluginFileNameResolver:
 
 
 class ExternalPluginSourceSupplier:
-    def __init__(self, plugin, revision, src_dir, src_config, builder):
+    def __init__(self, plugin, revision, src_dir, dist_config, builder):
         assert not plugin.core_plugin, "Plugin %s is a core plugin" % plugin.name
         self.plugin = plugin
         self.revision = revision
         # may be None if and only if the user has set an absolute plugin directory
         self.src_dir = src_dir
-        self.src_config = src_config
+        self.dist_config = dist_config
         self.builder = builder
         subdir_cfg_key = "plugin.%s.src.subdir" % self.plugin.name
         dir_cfg_key = "plugin.%s.src.dir" % self.plugin.name
-        if dir_cfg_key in self.src_config and subdir_cfg_key in self.src_config:
+        if dir_cfg_key in self.dist_config and subdir_cfg_key in self.dist_config:
             raise exceptions.SystemSetupError("Can only specify one of %s and %s but both are set." % (dir_cfg_key, subdir_cfg_key))
 
-        if dir_cfg_key in self.src_config:
-            self.plugin_src_dir = _config_value(self.src_config, dir_cfg_key)
+        if dir_cfg_key in self.dist_config:
+            self.plugin_src_dir = _config_value(self.dist_config, dir_cfg_key)
             # we must build directly in the plugin dir, not relative to Elasticsearch
             self.override_build_dir = self.plugin_src_dir
-        elif subdir_cfg_key in self.src_config:
-            self.plugin_src_dir = os.path.join(self.src_dir, _config_value(self.src_config, subdir_cfg_key))
+        elif subdir_cfg_key in self.dist_config:
+            self.plugin_src_dir = os.path.join(self.src_dir, _config_value(self.dist_config, subdir_cfg_key))
             self.override_build_dir = None
         else:
             raise exceptions.SystemSetupError("Neither %s nor %s are set for plugin %s." % (dir_cfg_key, subdir_cfg_key, self.plugin.name))
@@ -523,12 +524,12 @@ class ExternalPluginSourceSupplier:
 
     def fetch(self):
         # optional (but then source code is assumed to be available locally)
-        plugin_remote_url = self.src_config.get("plugin.%s.remote.repo.url" % self.plugin.name)
+        plugin_remote_url = self.dist_config.get("plugin.%s.remote.repo.url" % self.plugin.name)
         return SourceRepository(self.plugin.name, plugin_remote_url, self.plugin_src_dir, branch="master").fetch(self.revision)
 
     def prepare(self):
         if self.builder:
-            command = _config_value(self.src_config, f"plugin.{self.plugin.name}.build.command")
+            command = _config_value(self.dist_config, f"plugin.{self.plugin.name}.build.command")
             build_cmd = f"export JAVA_HOME={self.builder.java_home}; cd {self.override_build_dir}; {command}"
             self.builder.build([build_cmd])
 
@@ -536,7 +537,7 @@ class ExternalPluginSourceSupplier:
         binaries[self.plugin.name] = self.resolve_binary()
 
     def resolve_binary(self):
-        artifact_path = _config_value(self.src_config, "plugin.%s.build.artifact.subdir" % self.plugin.name)
+        artifact_path = _config_value(self.dist_config, "plugin.%s.build.artifact.subdir" % self.plugin.name)
         try:
             name = glob.glob("%s/%s/*.zip" % (self.plugin_src_dir, artifact_path))[0]
             return "file://%s" % name
