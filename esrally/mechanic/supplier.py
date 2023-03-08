@@ -526,7 +526,8 @@ class ExternalPluginSourceSupplier:
     def fetch(self):
         # optional (but then source code is assumed to be available locally)
         plugin_remote_url = self.dist_config.get("plugin.%s.remote.repo.url" % self.plugin.name)
-        return SourceRepository(self.plugin.name, plugin_remote_url, self.plugin_src_dir, branch="master").fetch(self.revision)
+        plugin_remote_branch = self.dist_config.get("plugin.%s.remote.repo.branch" % self.plugin.name, "master")
+        return SourceRepository(self.plugin.name, plugin_remote_url, self.plugin_src_dir, branch=plugin_remote_branch).fetch(self.revision)
 
     def prepare(self):
         if self.builder:
