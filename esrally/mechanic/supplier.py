@@ -143,6 +143,7 @@ def create(cfg, sources, distribution, car, plugins=None):
                     _src_dir(cfg, mandatory=False),
                     dist_config,
                     Builder(
+                        build_jdk=build_jdk,
                         src_dir=es_src_dir,
                         log_dir=paths.logs(),
                     ),
