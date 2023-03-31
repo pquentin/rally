@@ -48,6 +48,8 @@ class TestLog:
 
         # simulate user missing 'elastic_transport' in logging.json
         del existing_configuration["loggers"]["elastic_transport"]
+        # simulate old formatter name
+        existing_configuration["formatters"]["normal"]["()"] = "esrally.log.configure_utc_formatter"
 
         # first loads template, then existing configuration
         mock_json_load.side_effect = [source_template, copy.deepcopy(existing_configuration)]
@@ -59,9 +61,9 @@ class TestLog:
     log_format = "%(asctime)s %(message)s"
 
     def test_configure_formatter_utc(self):
-        formatter = log.configure_utc_formatter(format=self.log_format, datefmt="%Y-%m-%d %H:%M:%S")
+        formatter = log.configure_time_formatter(format=self.log_format, datefmt="%Y-%m-%d %H:%M:%S")
         assert formatter.converter is time.gmtime
 
     def test_configure_formatter_localtime(self):
-        formatter = log.configure_utc_formatter(format=self.log_format, datefmt="%Y-%m-%d %H:%M:%S", timezone="localtime")
+        formatter = log.configure_time_formatter(format=self.log_format, datefmt="%Y-%m-%d %H:%M:%S", timezone="localtime")
         assert formatter.converter is time.localtime

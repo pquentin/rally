@@ -26,7 +26,7 @@ from esrally.utils import io
 
 
 # pylint: disable=unused-argument
-def configure_utc_formatter(*args, **kwargs):
+def configure_time_formatter(*args, **kwargs):
     """
     Logging formatter that renders timestamps UTC, or in the local system time zone when the user requests it.
     """
@@ -53,6 +53,7 @@ def migrate_logging_configuration():
     2.8.0:
      * Ensures that any missing top level loggers in resources/logging.json are
        appended to an existing log configuration
+     * Update esrally.log.configure_utc_formatter to esrally.log.configure_time_formatter
     """
 
     def _missing_loggers(source, target):
@@ -78,7 +79,14 @@ def migrate_logging_configuration():
             if missing_loggers := _missing_loggers(source=template["loggers"], target=existing_logging_config["loggers"]):
                 existing_logging_config["loggers"].update(missing_loggers)
 
-    if missing_loggers:
+            outdated_formatter = False
+            for formatter_name in ("normal", "profile"):
+                formatter = existing_logging_config["formatters"][formatter_name]
+                if formatter["()"] == "esrally.log.configure_utc_formatter":
+                    formatter["()"] = "esrally.log.configure_time_formatter"
+                    outdated_formatter = True
+
+    if missing_loggers or outdated_formatter:
         with open(log_config_path(), "w", encoding="UTF-8") as target:
             json.dump(existing_logging_config, target, indent=2)
 
