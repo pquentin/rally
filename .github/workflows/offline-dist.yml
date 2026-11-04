@@ -22,7 +22,8 @@ permissions:
 jobs:
   offline-dist:
     name: Build and upload offline install package
-    runs-on: ubuntu-latest
+    # Pinned so that the glibc version required by the bundled wheels stays stable
+    runs-on: ubuntu-22.04
     permissions:
       contents: write  # Needed to create the draft release and upload assets
     env:
